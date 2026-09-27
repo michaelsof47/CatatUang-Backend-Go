@@ -2,9 +2,7 @@ package main
 
 import (
 	"catatuangbackend/config"
-
 	"catatuangbackend/routes"
-
 	"github.com/gin-gonic/gin"
 )
 
