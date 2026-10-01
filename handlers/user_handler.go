@@ -1,24 +1,29 @@
 package handlers
 
 import (
+	"catatuangbackend/config"
 	inputjson "catatuangbackend/models/input_json"
 	resultjson "catatuangbackend/models/result_json"
 	"catatuangbackend/utils"
 	"database/sql"
 	"log"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserHandler struct {
-	DB *sql.DB
+	DB    *sql.DB
+	Redis *redis.Client
 }
 
-func UserHandlerFunc(db *sql.DB) *UserHandler {
-	return &UserHandler{DB: db}
+func UserHandlerFunc(db *sql.DB, redis *redis.Client) *UserHandler {
+	return &UserHandler{DB: db, Redis: redis}
 }
 
 func (h *UserHandler) CreateUserNew(c *gin.Context) {
@@ -93,24 +98,57 @@ func (h *UserHandler) LoginUserAccount(c *gin.Context) {
 		return
 	}
 
+	key := "Login Attempt: " + login.EmailOrPhone
+
+	// Cek jumlah percobaan gagal sejauh ini
+	attempts, _ := h.Redis.Get(config.Context, key).Int()
+	if attempts > 5 {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "terlalu banyak percobaan, tunggu 5 menit"})
+		return
+	}
+
 	var user resultjson.User
 	query := `SELECT id, password FROM "User" WHERE email = $1 OR phone = $1`
 	err := h.DB.QueryRow(query, login.EmailOrPhone).Scan(&user.Id, &user.Password)
-	if err == sql.ErrNoRows {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "akun atau password salah"})
-		return
-	} else if err != nil {
+
+	loginFailed := err == sql.ErrNoRows
+
+	if err != nil && err != sql.ErrNoRows {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Println(login.Password)
-	log.Println(user.Password)
+	if !loginFailed {
+		// let's check diff password from body and password from database
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(login.Password)); err != nil {
+			loginFailed = true
+		}
+	}
 
-	// let's check diff password from body and password from database
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(login.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "password salah"})
+	if loginFailed {
+		h.Redis.Incr(config.Context, key)
+		h.Redis.Expire(config.Context, key, 5*time.Minute)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "akun dan password salah"})
 		return
+	}
+
+	// Login success, reset counter
+	h.Redis.Del(config.Context, key)
+
+	// Stored token into redis
+	activeTokenKey := "active_token:" + user.Id
+
+	// Check if user have active token from before session
+	oldToken, err := h.Redis.Get(config.Context, activeTokenKey).Result()
+	if err == nil && oldToken != "" {
+		claims, err := utils.ValidateToken(oldToken)
+		if err == nil {
+			exp := int64(claims["exp"].(float64))
+			ttl := time.Until(time.Unix(exp, 0))
+			if ttl > 0 {
+				h.Redis.Set(config.Context, "blacklist:"+oldToken, "true", ttl)
+			}
+		}
 	}
 
 	// generate token from JWT
@@ -120,5 +158,27 @@ func (h *UserHandler) LoginUserAccount(c *gin.Context) {
 		return
 	}
 
+	h.Redis.Set(config.Context, activeTokenKey, token, 7*24*time.Hour)
+
 	c.JSON(http.StatusOK, gin.H{"id": user.Id, "token": token})
+}
+
+func (h *UserHandler) LogoutUserAccount(c *gin.Context) {
+	id := c.GetString("id")
+	authHeader := c.GetHeader("Authorization")
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+	claims, err := utils.ValidateToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "token tidak valid"})
+		return
+	}
+
+	exp := int64(claims["exp"].(float64))
+	ttl := time.Until(time.Unix(exp, 0))
+
+	h.Redis.Set(config.Context, "blacklist:"+tokenString, "true", ttl)
+	h.Redis.Del(config.Context, "active_token"+id)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Logout Berhasil"})
 }
