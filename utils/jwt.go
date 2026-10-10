@@ -1,12 +1,13 @@
 package utils
 
 import (
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var JwtSecret = []byte("CatatUang-Backend")
+var JwtSecret = []byte(os.Getenv("JWT_SECRET"))
 
 func GenerateToken(id string) (string, error) {
 	claims := jwt.MapClaims{
