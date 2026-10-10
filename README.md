@@ -17,6 +17,7 @@ CatatUang Backend merupakan migrasi dari backend node.js ke bahasa go dimana con
 6. `/update_user` : digunakan untuk update informasi user
 7. `/update_profile_image` : digunakan untuk update informasi foto profile
 8. `/verify_otp` : digunakan untuk verifikasi otp setelah dilakukan login akun
+9. `/profile_image` : digunakan untuk mengambil image profile user
 
 ## Note
 

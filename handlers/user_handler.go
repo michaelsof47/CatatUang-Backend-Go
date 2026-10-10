@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -306,4 +307,23 @@ func (h *UserHandler) VerifyFirebaseToken(c *gin.Context) {
 	phoneNumber := token.Claims["phone_number"].(string)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Akun Berhasil di Verifikasi", "phone": phoneNumber})
+}
+
+func (h *UserHandler) RetrieveImageProfile(c *gin.Context) {
+	id := c.GetString("id")
+
+	var output models.UserResult
+	query := `SELECT url_user_image FROM "User" WHERE id = $1`
+	err := h.DB.QueryRow(query, id).Scan(&output.UrlUserImage)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+
+	path := filepath.Join("uploads", filepath.Base(output.UrlUserImage))
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "gambar tidak ditemukan"})
+		return
+	}
+
+	c.File(path)
 }
