@@ -17,6 +17,7 @@ func SetRoutes(r *gin.Engine, db *sql.DB, redis *redis.Client, firebaseApp *fire
 	r.POST("/login_user", h.LoginUserAccount)
 	r.POST("/logout_user", h.LogoutUserAccount)
 	r.POST("/verify_otp", h.VerifyFirebaseToken)
+	r.POST("/forgot_password", h.ForgotPassword)
 
 	protected := r.Group("/")
 	protected.Use(middleware.AuthMiddleware(redis))
@@ -25,6 +26,6 @@ func SetRoutes(r *gin.Engine, db *sql.DB, redis *redis.Client, firebaseApp *fire
 		protected.PUT("/update_password", h.UpdatePassword)
 		protected.PUT("/update_user", h.UpdateUserAccount)
 		protected.PUT("/update_profile_image", h.UpdateProfileImage)
-		protected.GET("/profile_image", h.RetrieveImageProfile)
+		protected.GET("/profile_image", h.GetImageProfile)
 	}
 }

@@ -16,5 +16,7 @@ func SetBalanceRoutes(r *gin.Engine, db *sql.DB, redis *redis.Client) {
 	protected.Use(middleware.AuthMiddleware(redis))
 	{
 		protected.PUT("/create_or_update_amount", h.CreateOrUpdateBalancesAmount)
+		protected.PATCH("/add_balance_amount", h.AddBalanceAmount)
+		protected.GET("/get_balance", h.GetBalanceAmount)
 	}
 }

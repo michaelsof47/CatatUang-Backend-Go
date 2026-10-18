@@ -31,6 +31,7 @@ func main() {
 	r := gin.Default()
 	routes.SetRoutes(r, db, redisdb, firebaseApp)
 	routes.SetBalanceRoutes(r, db, redisdb)
+	routes.SetTransactionRoutes(r, db, redisdb)
 
 	r.Run(":8080")
 }

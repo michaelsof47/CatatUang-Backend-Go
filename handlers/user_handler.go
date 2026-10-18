@@ -41,13 +41,20 @@ func (h *UserHandler) CreateUserNew(c *gin.Context) {
 	//retrieve file from body
 	file, err := c.FormFile("url_user_image")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "url_user_image wajib diisi"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Wajib isi foto profil"})
 		return
 	}
 
+	//create a directory
+	folderPath := filepath.Join("uploads", "image_profile")
+	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+		os.MkdirAll(folderPath, 0755)
+	}
+
 	//store file into /uploads
-	savePath := "uploads/" + file.Filename
-	log.Println(savePath)
+	savePath := filepath.Join(folderPath, file.Filename)
+	log.Println("Directory image stored at " + savePath)
+
 	if err := c.SaveUploadedFile(file, savePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -62,10 +69,8 @@ func (h *UserHandler) CreateUserNew(c *gin.Context) {
 
 	var user model.UserResult
 	query := `INSERT INTO "User" (first_name, last_name, url_user_image, email, phone, password) 
-			  VALUES ($1, $2, $3, $4, $5, $6)
-			  RETURNING id`
-	err = h.DB.QueryRow(query, createUser.FirstName, createUser.LastName, savePath, createUser.Email, createUser.Phone, hashedPassword).Scan(&user.Id)
-	if err != nil {
+			  VALUES ($1, $2, $3, $4, $5, $6)`
+	if _, err = h.DB.Exec(query, createUser.FirstName, createUser.LastName, savePath, createUser.Email, createUser.Phone, hashedPassword); err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
 			c.JSON(http.StatusConflict, gin.H{"error": "email sudah terdaftar"})
 			return
@@ -217,8 +222,42 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 	}
 
 	query = `UPDATE "User" SET password = $1 WHERE id = $2`
-	_, err = h.DB.Exec(query, hashedPassword, id)
+	if _, err = h.DB.Exec(query, hashedPassword, id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password berhasil diubah"})
+}
+
+func (h *UserHandler) ForgotPassword(c *gin.Context) {
+	var input models.UserLogin
+
+	if err := c.ShouldBind(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var output models.UserResult
+	query := `SELECT password FROM "User" WHERE email = $1 OR phone = $1`
+	if err := h.DB.QueryRow(query, input.EmailOrPhone).Scan(&output.Password); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Email atau No. Telp Tidak Ditemukan"})
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(output.Password), []byte(input.Password)); err == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "password yang diubah sama seperti sebelumnya. Silahkan gunakan password lain"})
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	query = `UPDATE "User" SET password = $1 WHERE email = $2 OR phone = $2`
+	if _, err = h.DB.Exec(query, hashedPassword, &input.EmailOrPhone); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -236,8 +275,7 @@ func (h *UserHandler) UpdateUserAccount(c *gin.Context) {
 	}
 
 	query := `UPDATE "User" SET first_name = $1, last_name = $2, email = $3, phone = $4 WHERE id = $5`
-	_, err := h.DB.Exec(query, &input.FirstName, &input.LastName, &input.Email, &input.Phone, id)
-	if err != nil {
+	if _, err := h.DB.Exec(query, &input.FirstName, &input.LastName, &input.Email, &input.Phone, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -262,15 +300,19 @@ func (h *UserHandler) UpdateProfileImage(c *gin.Context) {
 		return
 	}
 
-	savePath := "uploads/" + file.Filename
+	folderPath := filepath.Join("uploads", "image_profile")
+	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+		os.MkdirAll(folderPath, 0755)
+	}
+
+	savePath := filepath.Join(folderPath, file.Filename)
 	if err := c.SaveUploadedFile(file, savePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "gagal menyimpan gambar"})
 		return
 	}
 
 	query = `UPDATE "User" SET url_user_image = $1 WHERE id = $2`
-	_, err = h.DB.Exec(query, savePath, id)
-	if err != nil {
+	if _, err = h.DB.Exec(query, savePath, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -309,7 +351,7 @@ func (h *UserHandler) VerifyFirebaseToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Akun Berhasil di Verifikasi", "phone": phoneNumber})
 }
 
-func (h *UserHandler) RetrieveImageProfile(c *gin.Context) {
+func (h *UserHandler) GetImageProfile(c *gin.Context) {
 	id := c.GetString("id")
 
 	var output models.UserResult
@@ -319,7 +361,7 @@ func (h *UserHandler) RetrieveImageProfile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
-	path := filepath.Join("uploads", filepath.Base(output.UrlUserImage))
+	path := filepath.Join("uploads", "image_profile", filepath.Base(output.UrlUserImage))
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "gambar tidak ditemukan"})
 		return
