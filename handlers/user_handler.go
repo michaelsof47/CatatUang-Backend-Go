@@ -44,8 +44,8 @@ func (h *UserHandler) CreateUserNew(c *gin.Context) {
 		SELECT * FROM "User" WHERE 
 		LOWER(first_name) = LOWER($1) 
 		AND LOWER(last_name) = LOWER($2) 
-		OR LOWER(email) = LOWER($3)
-		OR LOWER(phone) = LOWER($4)
+		AND LOWER(email) = LOWER($3)
+		AND LOWER(phone) = LOWER($4)
 		)`
 	if err := h.DB.QueryRow(isAccAvailableQuery, &createUser.FirstName,
 		&createUser.LastName, &createUser.Email, &createUser.Phone).Scan(&exists); err != nil {

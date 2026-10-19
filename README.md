@@ -8,6 +8,7 @@ CatatUang Backend merupakan migrasi dari backend node.js ke bahasa go dimana con
 ### Koleksi User
 
 1. `/create_account` : digunakan untuk akses buat akun
+   - Apabila ketika yang diinput adalah nama depan dan nama belakang yang sama dengan yang diinput sebelumnya. Maka, akan muncul pesan error kalo harus memasukkan data baru
 2. `/login_user` : digunakan untuk akses login akun dan ada beberapa fitur yang diterapkan :
    - Jika User login lebih dari 5 kali. Maka, User tidak dapat spam login dan harus menunggu 5 menit kemudian
    - Jika User login lebih dari 1 device. Maka, User tidak dapat login di device tersebut sehingga harus logout dari device sebelumnya
@@ -28,6 +29,7 @@ CatatUang Backend merupakan migrasi dari backend node.js ke bahasa go dimana con
 
 ### Koleksi Transaksi
 1. `/create_category` : digunakan untuk menambah kategori berdasarkan user_id
+   - Apabila ketika yang diinput adalah nama kategori yang sama dengan yang diinput sebelumnya. Maka, akan muncul pesan error kalo harus memasukkan data baru
 2. `/get_categories` : digunakan untuk menampilkan isi kategori dalam bentuk list berdasarkan user_id
 
 ## Note
