@@ -38,6 +38,26 @@ func (h *UserHandler) CreateUserNew(c *gin.Context) {
 		return
 	}
 
+	// Check if account have available
+	var exists bool
+	isAccAvailableQuery := `SELECT EXISTS(
+		SELECT * FROM "User" WHERE 
+		LOWER(first_name) = LOWER($1) 
+		AND LOWER(last_name) = LOWER($2) 
+		OR LOWER(email) = LOWER($3)
+		OR LOWER(phone) = LOWER($4)
+		)`
+	if err := h.DB.QueryRow(isAccAvailableQuery, &createUser.FirstName,
+		&createUser.LastName, &createUser.Email, &createUser.Phone).Scan(&exists); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if exists {
+		c.JSON(http.StatusConflict, gin.H{"error": "Akun sudah tersedia. Silahkan gunakan akun lain"})
+		return
+	}
+
 	//retrieve file from body
 	file, err := c.FormFile("url_user_image")
 	if err != nil {

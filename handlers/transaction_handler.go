@@ -28,6 +28,19 @@ func (h *TransactionHandler) CreateCategory(c *gin.Context) {
 		return
 	}
 
+	// Check if category is available
+	var exists bool
+	isAccAvailableQuery := `SELECT EXISTS(SELECT * FROM "Category" WHERE LOWER(name) = LOWER($1))`
+	if err := h.DB.QueryRow(isAccAvailableQuery, &input.CategoryName).Scan(&exists); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if exists {
+		c.JSON(http.StatusConflict, gin.H{"error": "Nama kategori sudah ada"})
+		return
+	}
+
 	file, err := c.FormFile("cat_url_image")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Wajib upload foto kategori"})
