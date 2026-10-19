@@ -28,6 +28,7 @@ CatatUang Backend merupakan migrasi dari backend node.js ke bahasa go dimana con
 
 ### Koleksi Transaksi
 1. `/create_category` : digunakan untuk menambah kategori berdasarkan user_id
+2. `/get_categories` : digunakan untuk menampilkan isi kategori dalam bentuk list berdasarkan user_id
 
 ## Note
 

@@ -16,5 +16,6 @@ func SetTransactionRoutes(r *gin.Engine, db *sql.DB, redis *redis.Client) {
 	protected.Use(middleware.AuthMiddleware(redis))
 	{
 		protected.POST("/create_category", h.CreateCategory)
+		protected.GET("/get_categories", h.GetCategoriesList)
 	}
 }
