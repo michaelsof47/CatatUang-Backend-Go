@@ -170,14 +170,16 @@ func (h *UserHandler) LoginUserAccount(c *gin.Context) {
 	// Check if user have active token from before session
 	oldToken, err := h.Redis.Get(config.Context, activeTokenKey).Result()
 	if err == nil && oldToken != "" {
-		claims, err := utils.ValidateToken(oldToken)
-		if err == nil {
-			exp := int64(claims["exp"].(float64))
-			ttl := time.Until(time.Unix(exp, 0))
-			if ttl > 0 {
-				h.Redis.Set(config.Context, "blacklist:"+oldToken, "true", ttl)
+		go func(token string) {
+			claims, err := utils.ValidateToken(token)
+			if err == nil {
+				exp := int64(claims["exp"].(float64))
+				ttl := time.Until(time.Unix(exp, 0))
+				if ttl > 0 {
+					h.Redis.Set(config.Context, "blacklist:"+token, "true", ttl)
+				}
 			}
-		}
+		}(oldToken)
 	}
 
 	// generate token from JWT
@@ -206,8 +208,10 @@ func (h *UserHandler) LogoutUserAccount(c *gin.Context) {
 	exp := int64(claims["exp"].(float64))
 	ttl := time.Until(time.Unix(exp, 0))
 
-	h.Redis.Set(config.Context, "blacklist:"+tokenString, "true", ttl)
-	h.Redis.Del(config.Context, "active_token"+id)
+	go func(token, userId string, duration time.Duration) {
+		h.Redis.Set(config.Context, "blacklist:"+tokenString, "true", duration)
+		h.Redis.Del(config.Context, "active_token"+userId)
+	}(tokenString, id, ttl)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Logout Berhasil"})
 }
@@ -224,8 +228,7 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 	// Get an User Data
 	var user model.User
 	query := `SELECT password FROM "User" WHERE id = $1`
-	err := h.DB.QueryRow(query, id).Scan(&user.Password)
-	if err != sql.ErrNoRows && err != nil {
+	if err := h.DB.QueryRow(query, id).Scan(&user.Password); err != sql.ErrNoRows && err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
@@ -314,8 +317,7 @@ func (h *UserHandler) UpdateProfileImage(c *gin.Context) {
 
 	var oldImagePath string
 	query := `SELECT url_user_image FROM "User" WHERE id = $1`
-	err = h.DB.QueryRow(query, id).Scan(&oldImagePath)
-	if err != nil && err != sql.ErrNoRows {
+	if err = h.DB.QueryRow(query, id).Scan(&oldImagePath); err != nil && err != sql.ErrNoRows {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -340,7 +342,9 @@ func (h *UserHandler) UpdateProfileImage(c *gin.Context) {
 	log.Print("image old: " + oldImagePath)
 
 	if oldImagePath != "" {
-		os.Remove(oldImagePath)
+		go func(path string) {
+			os.Remove(path)
+		}(oldImagePath)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "foto profil berhasil diperbaharui", "image_url": savePath})

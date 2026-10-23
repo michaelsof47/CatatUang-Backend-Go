@@ -47,7 +47,7 @@ func (h *BalancesHandler) AddBalanceAmount(c *gin.Context) {
 		return
 	}
 
-	query := `UPDATE "Balance" SET balance_amount = balance_amount + $1 WHERE user_id = $2`
+	query := `UPDATE "Balance" SET balance_amount = balance_amount + $1, updated_at = NOW() WHERE user_id = $2`
 	if _, err := h.DB.Exec(query, input.BalanceAmount, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -61,7 +61,7 @@ func (h *BalancesHandler) GetBalanceAmount(c *gin.Context) {
 
 	var output models.BalanceResult
 	query := `SELECT user_id, balance_amount FROM "Balance" WHERE user_id = $1`
-	if err := h.DB.QueryRow(query, id).Scan(&output.User_Id, &output.BalanceAmount); err != nil {
+	if err := h.DB.QueryRow(query, id).Scan(&output.Id, &output.BalanceAmount); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

@@ -5,6 +5,6 @@ type BalanceInputOrUpdate struct {
 }
 
 type BalanceResult struct {
-	User_Id       string `json:"id"`
+	Id            string `json:"id"`
 	BalanceAmount string `json:"balance_amount"`
 }

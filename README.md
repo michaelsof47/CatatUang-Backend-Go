@@ -21,16 +21,21 @@ CatatUang Backend merupakan migrasi dari backend node.js ke bahasa go dimana con
 9. `/profile_image` : digunakan untuk mengambil image profile user
 10 `/forgot_password` : digunakan untuk update password jika lupa password
 
-### Koleksi Balance
+### Koleksi Balance `(group : /balance)`
 
 1. `/create_or_update_amount` : digunakan untuk pengisian awal saldo transaksi / update saldo (khusus di api)
 2. `/add_balance_amount` : digunakan untuk tambah saldo berdasarkan user_id jika saldo kurang
 3. `/get_balance` : digunakan untuk mendapatkan saldo berdasarkan user_id
 
-### Koleksi Transaksi
+### Koleksi Transaksi `(group : /transaction)`
+
 1. `/create_category` : digunakan untuk menambah kategori berdasarkan user_id
    - Apabila ketika yang diinput adalah nama kategori yang sama dengan yang diinput sebelumnya. Maka, akan muncul pesan error kalo harus memasukkan data baru
 2. `/get_categories` : digunakan untuk menampilkan isi kategori dalam bentuk list berdasarkan user_id
+3. `/get_category_photo` : digunakan untuk mengambil foto dari direktori berdasarkan category_id dan user_id
+4. `/create_transaction` : digunakan untuk membuat transaksi berdasarkan kategori yang dipilih
+5. `/get_transactions` : digunakan untuk menampilkan list transaksi berdasarkan user_id
+6. `/remove_category` : digunakan untuk menghapus kategori yang tidak digunakan berdasarkan category_id dan user_id
 
 ## Note
 
