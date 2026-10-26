@@ -2,23 +2,24 @@ package handlers
 
 import (
 	"catatuangbackend/models"
+	"catatuangbackend/repo"
+	"catatuangbackend/utils"
 	"database/sql"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
 type TransactionHandler struct {
-	DB *sql.DB
+	transactionRepo repo.TransactionInterface
+	balanceRepo     repo.BalanceInterface
 }
 
-func TransactionHandlerFunc(db *sql.DB) *TransactionHandler {
-	return &TransactionHandler{DB: db}
+func TransactionHandlerFunc(transactionRepo repo.TransactionInterface) *TransactionHandler {
+	return &TransactionHandler{transactionRepo: transactionRepo}
 }
 
 func (h *TransactionHandler) CreateCategory(c *gin.Context) {
@@ -31,9 +32,8 @@ func (h *TransactionHandler) CreateCategory(c *gin.Context) {
 	}
 
 	// Check if category is available
-	var exists bool
-	isAccAvailableQuery := `SELECT EXISTS(SELECT * FROM "Category" WHERE LOWER(name) = LOWER($1))`
-	if err := h.DB.QueryRow(isAccAvailableQuery, &input.CategoryName).Scan(&exists); err != nil {
+	exists, err := h.transactionRepo.IsCategoryDataAvailable(&input.CategoryName)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -61,9 +61,7 @@ func (h *TransactionHandler) CreateCategory(c *gin.Context) {
 		return
 	}
 
-	query := `INSERT INTO "Category" (name, description, url_image, user_id) VALUES ($1, $2, $3, $4)`
-	_, err = h.DB.Exec(query, input.CategoryName, input.CategoryDesc, savePath, id)
-	if err != nil {
+	if err := h.transactionRepo.InsertNewCategory(&input.CategoryName, &input.CategoryDesc, savePath, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -77,28 +75,16 @@ func (h *TransactionHandler) GetCategoriesList(c *gin.Context) {
 	_page := c.DefaultQuery("page", "1")
 	_limit := c.DefaultQuery("limit", "10")
 
-	page, err := strconv.Atoi(_page)
-	if err != nil || page < 1 {
-		page = 1
-	}
-
-	limit, err := strconv.Atoi(_limit)
-	if err != nil || limit < 1 {
-		limit = 10
-	}
-
-	offset := (page - 1) * limit
+	params := utils.ParsePagination(_page, _limit)
 
 	// Take total of data in Category
-	var totalItem int
-	countQuery := `SELECT COUNT(*) FROM "Category" WHERE user_id = $1`
-	if err := h.DB.QueryRow(countQuery, id).Scan(&totalItem); err != nil {
+	totalItem, err := h.transactionRepo.GetCategoryCount(id)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	query := `SELECT id, name, description, url_image FROM "Category" WHERE user_id = $1 ORDER BY id DESC LIMIT $2 OFFSET $3`
-	rows, err := h.DB.Query(query, id, limit, offset)
+	rows, err := h.transactionRepo.GetCategoriesList(id, params.Limit, params.Offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -119,16 +105,9 @@ func (h *TransactionHandler) GetCategoriesList(c *gin.Context) {
 		return
 	}
 
-	totalPages := int(math.Ceil(float64(totalItem) / float64(limit)))
-
 	c.JSON(http.StatusOK, gin.H{
-		"pagination": gin.H{
-			"current_page": page,
-			"limit":        limit,
-			"total_data":   totalItem,
-			"total_pages":  totalPages,
-		},
-		"data": categories,
+		"pagination": utils.BuildPaginationData(params, totalItem),
+		"data":       categories,
 	})
 }
 
@@ -141,14 +120,13 @@ func (h *TransactionHandler) GetCategoryPhotoItem(c *gin.Context) {
 		return
 	}
 
-	var output models.CategoryItem
-	query := `SELECT url_image FROM "Category" WHERE user_id = $1 AND id = $2`
-	if err := h.DB.QueryRow(query, id, &input.CategoryId).Scan(&output.CategoryUrlPhoto); err != nil {
+	urlPhoto, err := h.transactionRepo.GetCategoryPhoto(&input.CategoryId, id)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	path := filepath.Join("uploads", "category_photo", id, filepath.Base(output.CategoryUrlPhoto))
+	path := filepath.Join("uploads", "category_photo", id, filepath.Base(urlPhoto))
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "gambar tidak ditemukan"})
 		return
@@ -166,18 +144,13 @@ func (h *TransactionHandler) CreateTransaction(c *gin.Context) {
 		return
 	}
 
-	var output models.BalanceResult
-	findBalanceId := `SELECT id, balance_amount FROM "Balance" WHERE user_id = $1`
-	if err := h.DB.QueryRow(findBalanceId, id).Scan(&output.Id, &output.BalanceAmount); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	currentBalance, err := strconv.Atoi(output.BalanceAmount)
+	output, err := h.balanceRepo.GetBalanceAmount(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	currentBalance := output.BalanceAmount
 
 	diffBalanceAmount := currentBalance - input.TransactionTotalPrice
 
@@ -186,17 +159,8 @@ func (h *TransactionHandler) CreateTransaction(c *gin.Context) {
 		return
 	}
 
-	updateBalanceQuery := `UPDATE "Balance" SET balance_amount = $1 WHERE user_id = $2`
-	if _, err := h.DB.Exec(updateBalanceQuery, diffBalanceAmount, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	query := `INSERT INTO "Transaction" (name, transaction_date, amount, merchant_name, item_price, total_price, category_id, balances_id, user_id) 
-		VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)`
-	if _, err := h.DB.Exec(query, &input.TransactionName, &input.TransactionDate,
-		&input.TransactionAmount, &input.MerchantName, &input.TransactionPrice, &input.TransactionTotalPrice,
-		&input.CategoryId, &output.Id, id); err != nil {
+	//Jika saldo telah berkurang dan server tiba" down. maka, lakukan rollback commit
+	if err := h.transactionRepo.CreateTransaction(diffBalanceAmount, id, input, output.Id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -210,28 +174,15 @@ func (h *TransactionHandler) GetTransactionList(c *gin.Context) {
 	_page := c.DefaultQuery("page", "1")
 	_limit := c.DefaultQuery("limit", "10")
 
-	page, err := strconv.Atoi(_page)
-	if err != nil || page < 1 {
-		page = 1
-	}
+	params := utils.ParsePagination(_page, _limit)
 
-	limit, err := strconv.Atoi(_limit)
-	if err != nil || limit < 1 {
-		limit = 10
-	}
-
-	offset := (page - 1) * limit
-
-	var totalItem int
-	findTotalItem := `SELECT COUNT(*) FROM "Transaction" WHERE user_id = $1`
-	if err := h.DB.QueryRow(findTotalItem, id).Scan(&totalItem); err != nil {
+	totalItem, err := h.transactionRepo.GetTransactionCount(id)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	query := `SELECT id, name, transaction_date, amount, merchant_name, item_price,
-		total_price, category_id FROM "Transaction" WHERE user_id = $1 ORDER BY id DESC LIMIT $2 OFFSET $3`
-	rows, err := h.DB.Query(query, id, limit, offset)
+	rows, err := h.transactionRepo.GetTransactionList(id, params.Limit, params.Offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -254,16 +205,9 @@ func (h *TransactionHandler) GetTransactionList(c *gin.Context) {
 		return
 	}
 
-	totalPages := int(math.Ceil(float64(totalItem) / float64(limit)))
-
 	c.JSON(http.StatusOK, gin.H{
-		"pagination": gin.H{
-			"current_page": page,
-			"limit":        limit,
-			"total_data":   totalItem,
-			"total_pages":  totalPages,
-		},
-		"data": transactions,
+		"pagination": utils.BuildPaginationData(params, totalItem),
+		"data":       transactions,
 	})
 }
 
@@ -276,16 +220,16 @@ func (h *TransactionHandler) RemoveCategory(c *gin.Context) {
 		return
 	}
 
-	var photoPath string
-	findQuery := `SELECT url_image FROM "Category" WHERE id = $1 AND user_id = $2`
-	err := h.DB.QueryRow(findQuery, &input.CategoryId, id).Scan(&photoPath)
-	if err != nil || err == sql.ErrNoRows {
+	photoPath, err := h.transactionRepo.GetCategoryPhoto(&input.CategoryId, id)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Kategori tidak ditemukan"})
+		return
+	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	deleteQuery := `DELETE FROM "Category" WHERE id = $1 AND user_id = $2`
-	if _, err := h.DB.Exec(deleteQuery, &input.CategoryId, id); err != nil {
+	if err := h.transactionRepo.RemoveCategoryItem(&input.CategoryId, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

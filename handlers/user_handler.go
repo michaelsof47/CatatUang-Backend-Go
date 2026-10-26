@@ -13,21 +13,22 @@ import (
 	"strings"
 	"time"
 
+	"catatuangbackend/repo"
+
 	firebase "firebase.google.com/go/v4"
 	"github.com/gin-gonic/gin"
-	"github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserHandler struct {
-	DB       *sql.DB
+	userRepo repo.UserInterface
 	Redis    *redis.Client
 	Firebase *firebase.App
 }
 
-func UserHandlerFunc(db *sql.DB, redis *redis.Client, firebase *firebase.App) *UserHandler {
-	return &UserHandler{DB: db, Redis: redis, Firebase: firebase}
+func UserHandlerFunc(userRepo repo.UserInterface, redis *redis.Client, firebase *firebase.App) *UserHandler {
+	return &UserHandler{userRepo: userRepo, Redis: redis, Firebase: firebase}
 }
 
 func (h *UserHandler) CreateUserNew(c *gin.Context) {
@@ -39,16 +40,8 @@ func (h *UserHandler) CreateUserNew(c *gin.Context) {
 	}
 
 	// Check if account have available
-	var exists bool
-	isAccAvailableQuery := `SELECT EXISTS(
-		SELECT * FROM "User" WHERE 
-		LOWER(first_name) = LOWER($1) 
-		AND LOWER(last_name) = LOWER($2) 
-		AND LOWER(email) = LOWER($3)
-		AND LOWER(phone) = LOWER($4)
-		)`
-	if err := h.DB.QueryRow(isAccAvailableQuery, &createUser.FirstName,
-		&createUser.LastName, &createUser.Email, &createUser.Phone).Scan(&exists); err != nil {
+	exists, err := h.userRepo.CheckAvailabilityAccount(createUser)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -87,11 +80,9 @@ func (h *UserHandler) CreateUserNew(c *gin.Context) {
 		return
 	}
 
-	var user model.UserResult
-	query := `INSERT INTO "User" (first_name, last_name, url_user_image, email, phone, password) 
-			  VALUES ($1, $2, $3, $4, $5, $6)`
-	if _, err = h.DB.Exec(query, createUser.FirstName, createUser.LastName, savePath, createUser.Email, createUser.Phone, hashedPassword); err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+	outputUser, err := h.userRepo.InsertNewAccount(createUser, savePath, hashedPassword)
+	if err != nil {
+		if err.Error() == "Email sudah terdaftar" {
 			c.JSON(http.StatusConflict, gin.H{"error": "email sudah terdaftar"})
 			return
 		}
@@ -99,17 +90,15 @@ func (h *UserHandler) CreateUserNew(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"id": user.Id})
+	c.JSON(http.StatusCreated, gin.H{"id": outputUser.Id})
 }
 
 func (h *UserHandler) GetUserById(c *gin.Context) {
 	id := c.Param("id")
 
-	var user model.UserResult
-	query := `SELECT id, first_name, last_name, reward_status, url_user_image, email, phone, password, "createdAt" FROM "User" WHERE id = $1`
-	err := h.DB.QueryRow(query, id).Scan(&user.Id, &user.FirstName, &user.LastName, &user.RewardStatus, &user.UrlUserImage, &user.Email, &user.Phone, &user.Password, &user.CreatedAt)
-	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user tidak ditemukan"})
+	user, err := h.userRepo.GetUserById(id)
+	if err.Error() == "User tidak ditemukan" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
 		return
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -136,13 +125,11 @@ func (h *UserHandler) LoginUserAccount(c *gin.Context) {
 		return
 	}
 
-	var user model.UserResult
-	query := `SELECT id, password FROM "User" WHERE email = $1 OR phone = $1`
-	err := h.DB.QueryRow(query, login.EmailOrPhone).Scan(&user.Id, &user.Password)
+	user, err := h.userRepo.GetUserByPhoneAndEmail(login.EmailOrPhone)
 
 	loginFailed := err == sql.ErrNoRows
 
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -226,10 +213,13 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 	}
 
 	// Get an User Data
-	var user model.User
-	query := `SELECT password FROM "User" WHERE id = $1`
-	if err := h.DB.QueryRow(query, id).Scan(&user.Password); err != sql.ErrNoRows && err != nil {
+	user, err := h.userRepo.GetUserPasswordById(id)
+	if err.Error() == "Akun Password tidak ditemukan" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Akun Password tidak ditemukan"})
+		return
+	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	// Check if password still same as before. it will be received error message
@@ -244,8 +234,9 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 		return
 	}
 
-	query = `UPDATE "User" SET password = $1 WHERE id = $2`
-	if _, err = h.DB.Exec(query, hashedPassword, id); err != nil {
+	//Update Password based on id and hashedpassword
+	err = h.userRepo.UpdatePasswordById(hashedPassword, id)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -261,9 +252,8 @@ func (h *UserHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	var output models.UserResult
-	query := `SELECT password FROM "User" WHERE email = $1 OR phone = $1`
-	if err := h.DB.QueryRow(query, input.EmailOrPhone).Scan(&output.Password); err != nil {
+	output, err := h.userRepo.GetUserByPhoneAndEmail(input.EmailOrPhone)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Email atau No. Telp Tidak Ditemukan"})
 		return
 	}
@@ -279,8 +269,8 @@ func (h *UserHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	query = `UPDATE "User" SET password = $1 WHERE email = $2 OR phone = $2`
-	if _, err = h.DB.Exec(query, hashedPassword, &input.EmailOrPhone); err != nil {
+	err = h.userRepo.UpdatePasswordBasedOnEmailAndPhone(hashedPassword, input.EmailOrPhone)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -297,8 +287,8 @@ func (h *UserHandler) UpdateUserAccount(c *gin.Context) {
 		return
 	}
 
-	query := `UPDATE "User" SET first_name = $1, last_name = $2, email = $3, phone = $4 WHERE id = $5`
-	if _, err := h.DB.Exec(query, &input.FirstName, &input.LastName, &input.Email, &input.Phone, id); err != nil {
+	err := h.userRepo.UpdateAccountUserInfo(input.FirstName, input.LastName, input.Email, input.Phone, id)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -315,9 +305,11 @@ func (h *UserHandler) UpdateProfileImage(c *gin.Context) {
 		return
 	}
 
-	var oldImagePath string
-	query := `SELECT url_user_image FROM "User" WHERE id = $1`
-	if err = h.DB.QueryRow(query, id).Scan(&oldImagePath); err != nil && err != sql.ErrNoRows {
+	oldImagePath, err := h.userRepo.GetUrlImagePhoto(id)
+	if err.Error() == "Foto Akun tidak ditemukan" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Foto Akun tidak ditemukan"})
+		return
+	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -333,8 +325,8 @@ func (h *UserHandler) UpdateProfileImage(c *gin.Context) {
 		return
 	}
 
-	query = `UPDATE "User" SET url_user_image = $1 WHERE id = $2`
-	if _, err = h.DB.Exec(query, savePath, id); err != nil {
+	err = h.userRepo.UpdatePhotoProfile(savePath, id)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -378,14 +370,12 @@ func (h *UserHandler) VerifyFirebaseToken(c *gin.Context) {
 func (h *UserHandler) GetImageProfile(c *gin.Context) {
 	id := c.GetString("id")
 
-	var output models.UserResult
-	query := `SELECT url_user_image FROM "User" WHERE id = $1`
-	err := h.DB.QueryRow(query, id).Scan(&output.UrlUserImage)
+	photoPath, err := h.userRepo.GetUrlImagePhoto(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
-	path := filepath.Join("uploads", "image_profile", filepath.Base(output.UrlUserImage))
+	path := filepath.Join("uploads", "image_profile", filepath.Base(photoPath))
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "gambar tidak ditemukan"})
 		return

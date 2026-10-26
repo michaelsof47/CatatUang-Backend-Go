@@ -21,7 +21,7 @@ type TransactionInput struct {
 	TransactionAmount     int    `json:"trans_amount" form:"trans_amount"`
 	MerchantName          string `json:"merch_name" form:"merch_name"`
 	TransactionPrice      int    `json:"trans_price" form:"trans_price"`
-	TransactionTotalPrice int    `json:"trans_total_price" form:"trans_total_price"`
+	TransactionTotalPrice int64  `json:"trans_total_price" form:"trans_total_price"`
 	CategoryIdItem
 }
 

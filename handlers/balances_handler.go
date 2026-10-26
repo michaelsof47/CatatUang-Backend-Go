@@ -2,18 +2,18 @@ package handlers
 
 import (
 	"catatuangbackend/models"
-	"database/sql"
+	"catatuangbackend/repo"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 type BalancesHandler struct {
-	DB *sql.DB
+	BalanceRepo repo.BalanceInterface
 }
 
-func BalancesHandlerFunc(db *sql.DB) *BalancesHandler {
-	return &BalancesHandler{DB: db}
+func BalancesHandlerFunc(balanceRepo repo.BalanceInterface) *BalancesHandler {
+	return &BalancesHandler{BalanceRepo: balanceRepo}
 }
 
 func (h *BalancesHandler) CreateOrUpdateBalancesAmount(c *gin.Context) {
@@ -25,12 +25,7 @@ func (h *BalancesHandler) CreateOrUpdateBalancesAmount(c *gin.Context) {
 		return
 	}
 
-	query := `INSERT INTO "Balance" (user_id, balance_amount)
-		VALUES ($1, $2)
-		ON CONFLICT (user_id) DO UPDATE
-		SET balance_amount = $2,
-		updated_at = NOW()`
-	if _, err := h.DB.Exec(query, id, input.BalanceAmount); err != nil {
+	if err := h.BalanceRepo.CreateOrUpdateBalance(input.BalanceAmount, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -47,8 +42,7 @@ func (h *BalancesHandler) AddBalanceAmount(c *gin.Context) {
 		return
 	}
 
-	query := `UPDATE "Balance" SET balance_amount = balance_amount + $1, updated_at = NOW() WHERE user_id = $2`
-	if _, err := h.DB.Exec(query, input.BalanceAmount, id); err != nil {
+	if err := h.BalanceRepo.AddMoreBalance(input.BalanceAmount, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -59,9 +53,8 @@ func (h *BalancesHandler) AddBalanceAmount(c *gin.Context) {
 func (h *BalancesHandler) GetBalanceAmount(c *gin.Context) {
 	id := c.GetString("id")
 
-	var output models.BalanceResult
-	query := `SELECT user_id, balance_amount FROM "Balance" WHERE user_id = $1`
-	if err := h.DB.QueryRow(query, id).Scan(&output.Id, &output.BalanceAmount); err != nil {
+	output, err := h.BalanceRepo.GetBalanceAmount(id)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

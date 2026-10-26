@@ -3,6 +3,7 @@ package routes
 import (
 	"catatuangbackend/handlers"
 	"catatuangbackend/middleware"
+	"catatuangbackend/repo"
 	"database/sql"
 
 	"github.com/gin-gonic/gin"
@@ -10,7 +11,8 @@ import (
 )
 
 func SetBalanceRoutes(r *gin.Engine, db *sql.DB, redis *redis.Client) {
-	h := handlers.BalancesHandlerFunc(db)
+	_repo := repo.BalanceRepository(db)
+	h := handlers.BalancesHandlerFunc(_repo)
 
 	protected := r.Group("/balance")
 	protected.Use(middleware.AuthMiddleware(redis))

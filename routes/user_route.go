@@ -3,6 +3,7 @@ package routes
 import (
 	"catatuangbackend/handlers"
 	"catatuangbackend/middleware"
+	repo "catatuangbackend/repo"
 	"database/sql"
 
 	firebase "firebase.google.com/go/v4"
@@ -11,7 +12,8 @@ import (
 )
 
 func SetRoutes(r *gin.Engine, db *sql.DB, redis *redis.Client, firebaseApp *firebase.App) {
-	h := handlers.UserHandlerFunc(db, redis, firebaseApp)
+	repo := repo.UserRepository(db)
+	h := handlers.UserHandlerFunc(repo, redis, firebaseApp)
 
 	r.POST("/create_account", h.CreateUserNew)
 	r.POST("/login_user", h.LoginUserAccount)

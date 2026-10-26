@@ -3,6 +3,7 @@ package routes
 import (
 	"catatuangbackend/handlers"
 	"catatuangbackend/middleware"
+	repo "catatuangbackend/repo"
 	"database/sql"
 
 	"github.com/gin-gonic/gin"
@@ -10,7 +11,8 @@ import (
 )
 
 func SetTransactionRoutes(r *gin.Engine, db *sql.DB, redis *redis.Client) {
-	h := handlers.TransactionHandlerFunc(db)
+	_repo := repo.TransactionRepository(db)
+	h := handlers.TransactionHandlerFunc(_repo)
 
 	protected := r.Group("/transaction")
 	protected.Use(middleware.AuthMiddleware(redis))
