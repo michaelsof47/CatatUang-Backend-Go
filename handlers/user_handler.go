@@ -197,7 +197,7 @@ func (h *UserHandler) LogoutUserAccount(c *gin.Context) {
 
 	go func(token, userId string, duration time.Duration) {
 		h.Redis.Set(config.Context, "blacklist:"+tokenString, "true", duration)
-		h.Redis.Del(config.Context, "active_token"+userId)
+		h.Redis.Del(config.Context, "active_token:"+userId)
 	}(tokenString, id, ttl)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Logout Berhasil"})

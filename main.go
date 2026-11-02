@@ -29,9 +29,14 @@ func main() {
 	}
 
 	r := gin.Default()
+
+	// Set NGINX
+	r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
+
 	routes.SetRoutes(r, db, redisdb, firebaseApp)
 	routes.SetBalanceRoutes(r, db, redisdb)
 	routes.SetTransactionRoutes(r, db, redisdb)
+	routes.SetPlannerRoutes(r, db, redisdb)
 
 	r.Run(":8080")
 }

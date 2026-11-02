@@ -39,6 +39,14 @@ Path : `/transaction`
 5. `/get_transactions` : digunakan untuk menampilkan list transaksi berdasarkan user_id
 6. `/remove_category` : digunakan untuk menghapus kategori yang tidak digunakan berdasarkan category_id dan user_id
 
+### Koleksi Planner
+1. `/create_planner_book` : digunakan untuk membuat buku perencanaan berdasarkan user_id dengan memastikan bahwa target_start_date harus hari ini dan target_end_date tidak boleh kurang dari target_start_date
+2. `/get_planner_book` : digunakan untuk menampilkan isi buku berdasarkan user_id
+3. `/remove_planner_book` : digunakan untuk menghapus buku yang tidak digunakan berdasarkan id buku dan user_id
+4. `/update_book` : Hampir sama seperti create_planner_book. Hanya, berfokus pada update data saja
+
+
+
 ## Note
 
 Untuk CatatUang Backend masih dalam tahap migrasi dan integrasi sehingga masih dikembangkan sampai saat ini. Saran dan Masukkan sangat membantu saya dalam mengembangkan aplikasi ini.
