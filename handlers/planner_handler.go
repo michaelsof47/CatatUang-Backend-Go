@@ -5,6 +5,7 @@ import (
 	"catatuangbackend/repo"
 	"catatuangbackend/utils"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -90,7 +91,7 @@ func (h *PlannerHandler) GetPlannerBookList(c *gin.Context) {
 	planners := make([]models.PlannerBookModels, 0)
 	for rows.Next() {
 		var item models.PlannerBookModels
-		if err := rows.Scan(&item.Id, &item.BookName, &item.TargetStartDate, &item.TargetEndDate, &item.TargetAmount); err != nil {
+		if err := rows.Scan(&item.BookId, &item.BookName, &item.TargetStartDate, &item.TargetEndDate, &item.TargetAmount); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -117,7 +118,7 @@ func (h *PlannerHandler) RemoveBookItem(c *gin.Context) {
 		return
 	}
 
-	if err := h.plannerRepo.RemovePlannerBook(input.Id, id); err != nil {
+	if err := h.plannerRepo.RemovePlannerBook(input.BookId, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -145,4 +146,95 @@ func (h *PlannerHandler) UpdatePlannerBook(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Data Buku berhasil diubah."})
+}
+
+func (h *PlannerHandler) CreateItemPlanner(c *gin.Context) {
+	id := c.GetString("id")
+	var input models.DetailBookItemModels
+
+	if err := c.ShouldBind(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	//Check if book was an owner or not
+	isOwner, err := h.plannerRepo.CheckIfPlannerBookWasOwnered(input.BookId, id)
+	if !isOwner {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Anda tidak dapat membuat item buku karena bukan punya anda. Silahkan menghubungi admin terlebih dahulu."})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	//Check if book name was similar in database. if similar, user get error
+	exists, err := h.plannerRepo.CheckIfItemPlannerWasAdded(input.PlannerBookId.BookId, input.PlannerItemName)
+	if exists {
+		c.JSON(http.StatusConflict, gin.H{"error": "Terjadi duplikasi item. Mohon gunakan item lainnya."})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.plannerRepo.CreateItemPlanner(input, id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Item Buku telah berhasil dibuat"})
+}
+
+func (h *PlannerHandler) GetDetailItemList(c *gin.Context) {
+	id := c.GetString("id")
+
+	bookId := c.Param("id")
+	_bookId, _ := strconv.Atoi(bookId)
+
+	_page := c.DefaultQuery("page", "1")
+	_limit := c.DefaultQuery("limit", "10")
+
+	params := utils.ParsePagination(_page, _limit)
+
+	//Check if book was an owner or not
+	isOwner, err := h.plannerRepo.CheckIfPlannerBookWasOwnered(_bookId, id)
+	if !isOwner {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Anda tidak dapat membuat item buku karena bukan punya anda. Silahkan menghubungi admin terlebih dahulu."})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	totalItem, err := h.plannerRepo.GetDetailItemCount(_bookId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	rows, err := h.plannerRepo.GetDetailItemList(_bookId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	itemList := make([]models.DetailBookItemModels, 0)
+	for rows.Next() {
+		var item models.DetailBookItemModels
+		if err := rows.Scan(&item.ItemPlannerId, &item.PlannerItemName, &item.ItemTotalAmount); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		itemList = append(itemList, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"pagination": utils.BuildPaginationData(params, totalItem),
+		"data":       itemList,
+	})
 }
