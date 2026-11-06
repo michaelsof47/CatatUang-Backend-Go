@@ -23,5 +23,6 @@ func SetPlannerRoutes(r *gin.Engine, db *sql.DB, redis *redis.Client) {
 		protected.PUT("/update_book", h.UpdatePlannerBook)
 		protected.POST("/create_item_book", h.CreateItemPlanner)
 		protected.GET("/get_book/:id", h.GetDetailItemList)
+		protected.DELETE("/remove_planner_item", h.RemoveItemPlanner)
 	}
 }

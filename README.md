@@ -48,8 +48,7 @@ Path : `/planner`
 4. `/update_book` : Hampir sama seperti create_planner_book. Hanya, berfokus pada update data saja
 5. `/create_item_book` : digunakan untuk membuat item pada tiap buku perencanaan
 6. `/get_book/:id` : digunakan untuk mengambil data item dari id buku pemilik user
-
-
+7. `/remove_planner_item` : digunakan untuk menghapus item planner jika tidak diperlukan berdasarkan book_id dan user_id
 
 ## Note
 

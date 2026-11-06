@@ -16,6 +16,7 @@ type PlannerInterface interface {
 	CheckIfPlannerBookWasOwnered(bookId int, userId string) (bool, error)
 	GetDetailItemCount(bookId int) (int, error)
 	GetDetailItemList(bookId int) (*sql.Rows, error)
+	RemoveItemPlanner(itemPlannerId int) error
 }
 
 type PlannerRepo struct {
@@ -89,4 +90,10 @@ func (h *PlannerRepo) GetDetailItemList(bookId int) (*sql.Rows, error) {
 	query := `SELECT id, name, total_amount FROM "DetailPlannerBook" WHERE planner_book_id = $1`
 	rows, err := h.db.Query(query, bookId)
 	return rows, err
+}
+
+func (h *PlannerRepo) RemoveItemPlanner(itemPlannerId int) error {
+	query := `DELETE FROM "DetailPlannerBook" WHERE id = $1`
+	_, err := h.db.Exec(query, itemPlannerId)
+	return err
 }

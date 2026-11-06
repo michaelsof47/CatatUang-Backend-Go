@@ -238,3 +238,30 @@ func (h *PlannerHandler) GetDetailItemList(c *gin.Context) {
 		"data":       itemList,
 	})
 }
+
+func (h *PlannerHandler) RemoveItemPlanner(c *gin.Context) {
+	id := c.GetString("id")
+	var input models.DetailBookItemModels
+
+	if err := c.ShouldBind(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	isOwner, err := h.plannerRepo.CheckIfPlannerBookWasOwnered(input.PlannerBookId.BookId, id)
+
+	if !isOwner {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Anda tidak dapat membuat item buku karena bukan punya anda. Silahkan menghubungi admin terlebih dahulu."})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.plannerRepo.RemoveItemPlanner(input.ItemPlannerId); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"error": "Item Planner telah dihapus."})
+}
