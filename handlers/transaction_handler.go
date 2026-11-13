@@ -151,7 +151,6 @@ func (h *TransactionHandler) CreateTransaction(c *gin.Context) {
 	}
 
 	currentBalance := output.BalanceAmount
-
 	diffBalanceAmount := currentBalance - input.TransactionTotalPrice
 
 	if diffBalanceAmount < 0 {
@@ -160,7 +159,7 @@ func (h *TransactionHandler) CreateTransaction(c *gin.Context) {
 	}
 
 	//Jika saldo telah berkurang dan server tiba" down. maka, lakukan rollback commit
-	if err := h.transactionRepo.CreateTransaction(diffBalanceAmount, id, input, output.Id); err != nil {
+	if err := h.transactionRepo.CreateTransaction(input.TransactionTotalPrice, id, input, output.Id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

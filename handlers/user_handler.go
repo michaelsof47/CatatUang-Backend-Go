@@ -80,7 +80,7 @@ func (h *UserHandler) CreateUserNew(c *gin.Context) {
 		return
 	}
 
-	outputUser, err := h.userRepo.InsertNewAccount(createUser, savePath, hashedPassword)
+	userId, err := h.userRepo.InsertNewAccount(createUser, savePath, hashedPassword)
 	if err != nil {
 		if err.Error() == "Email sudah terdaftar" {
 			c.JSON(http.StatusConflict, gin.H{"error": "email sudah terdaftar"})
@@ -90,7 +90,7 @@ func (h *UserHandler) CreateUserNew(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"id": outputUser.Id})
+	c.JSON(http.StatusCreated, gin.H{"id": userId})
 }
 
 func (h *UserHandler) GetUserById(c *gin.Context) {

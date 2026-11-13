@@ -10,7 +10,7 @@ import (
 
 type UserInterface interface {
 	CheckAvailabilityAccount(createUser models.User) (bool, error)
-	InsertNewAccount(createUser models.User, savePath string, hashedPassword []byte) (models.UserResult, error)
+	InsertNewAccount(createUser models.User, savePath string, hashedPassword []byte) (string, error)
 	GetUserById(id string) (models.UserResult, error)
 	GetUserByPhoneAndEmail(emailOrPhone string) (models.UserResult, error)
 	GetUserPasswordById(id string) (models.User, error)
@@ -43,17 +43,17 @@ func (h *UserRepo) CheckAvailabilityAccount(createUser models.User) (bool, error
 	return exists, err
 }
 
-func (h *UserRepo) InsertNewAccount(createUser models.User, savePath string, hashedPassword []byte) (models.UserResult, error) {
+func (h *UserRepo) InsertNewAccount(createUser models.User, savePath string, hashedPassword []byte) (string, error) {
 	var user models.UserResult
 	query := `INSERT INTO "User" (first_name, last_name, url_user_image, email, phone, password) 
-			  VALUES ($1, $2, $3, $4, $5, $6)`
-	if _, err := h.db.Exec(query, createUser.FirstName, createUser.LastName, savePath, createUser.Email, createUser.Phone, hashedPassword); err != nil {
+			  VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
+	if err := h.db.QueryRow(query, createUser.FirstName, createUser.LastName, savePath, createUser.Email, createUser.Phone, hashedPassword).Scan(&user.Id); err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
-			return models.UserResult{}, errors.New("Email anda sudah terdaftar")
+			return "", errors.New("Email anda sudah terdaftar")
 		}
-		return models.UserResult{}, err
+		return "", err
 	}
-	return user, nil
+	return user.Id, nil
 }
 
 func (h *UserRepo) GetUserById(id string) (models.UserResult, error) {

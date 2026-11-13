@@ -4,7 +4,6 @@ import (
 	"catatuangbackend/config"
 	"catatuangbackend/routes"
 	"log"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -21,7 +20,7 @@ func main() {
 	defer redisdb.Close()
 
 	// for testing otp code
-	os.Setenv("FIREBASE_AUTH_EMULATOR_HOST", "127.0.0.1:9099")
+	//os.Setenv("FIREBASE_AUTH_EMULATOR_HOST", "127.0.0.1:9099")
 
 	firebaseApp, err := config.InitFirebase()
 	if err != nil {

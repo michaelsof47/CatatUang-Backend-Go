@@ -1,0 +1,66 @@
+name: "catatuang-backend"
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+    workflow_dispatch:
+
+concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+env:
+    IMAGE-NAME: ghcr.io/${{ github.repository_owner }}/catatuang-backend-go
+    PLATFORMS: linux/amd64,linux/arm64
+
+jobs:
+    # Test Code in GO
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            
+            - uses: actions/setup-go@v5
+              with:
+                go-version-file: go.mod
+                cache: true
+            
+            - name: Vet
+              run: go vet ./...
+            
+            - name: Test
+              run: go test ./... -race
+            
+            - name: Build
+              run: go build ./..
+
+    schema:
+        runs-on: ubuntu-latest
+        services:
+            postgres:
+                image: postgres:16-alpine
+                env:
+                    POSTGRES_USER: ci
+                    POSTGRES_PASSWORD: ci
+                    POSTGRES_DB: ci
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U ci -d ci"
+                    --health-interval 5s
+                    --health-timeout 3s
+                    --health-retries 10
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Import Schema.sql
+              run: echo "Tambah Schema.sql"
+
+ 
+             
+                

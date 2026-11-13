@@ -177,6 +177,18 @@ func (h *PlannerHandler) CreateItemPlanner(c *gin.Context) {
 		return
 	}
 
+	//Check limitation of amount that need user want to input
+	targetAmount, err := h.plannerRepo.GetBookTargetAmount(input.PlannerBookId.BookId, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if input.ItemTotalAmount > targetAmount {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Jumlah yang diinput melebihi batas nominal perencanaan keuangan."})
+		return
+	}
+
 	if err := h.plannerRepo.CreateItemPlanner(input, id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

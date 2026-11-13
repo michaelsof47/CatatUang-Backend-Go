@@ -65,7 +65,7 @@ func (h *TransactionRepo) CreateTransaction(diffBalanceAmount int64, id string, 
 	}
 	defer rollback.Rollback()
 
-	updateBalanceQuery := `UPDATE "Balance" SET balance_amount = $1 WHERE user_id = $2`
+	updateBalanceQuery := `UPDATE "Balance" SET balance_amount = balance_amount - $1 WHERE user_id = $2 AND balance_amount >= $1`
 	if _, err := rollback.Exec(updateBalanceQuery, diffBalanceAmount, id); err != nil {
 		return err
 	}

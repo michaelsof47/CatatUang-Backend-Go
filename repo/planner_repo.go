@@ -17,6 +17,7 @@ type PlannerInterface interface {
 	GetDetailItemCount(bookId int) (int, error)
 	GetDetailItemList(bookId int) (*sql.Rows, error)
 	RemoveItemPlanner(itemPlannerId int) error
+	GetBookTargetAmount(bookId int, userId string) (int64, error)
 }
 
 type PlannerRepo struct {
@@ -96,4 +97,11 @@ func (h *PlannerRepo) RemoveItemPlanner(itemPlannerId int) error {
 	query := `DELETE FROM "DetailPlannerBook" WHERE id = $1`
 	_, err := h.db.Exec(query, itemPlannerId)
 	return err
+}
+
+func (h *PlannerRepo) GetBookTargetAmount(bookId int, userId string) (int64, error) {
+	var targetAmount int64
+	query := `SELECT target_amount FROM "PlannerBook" WHERE id = $1 AND user_id = $2`
+	err := h.db.QueryRow(query, bookId, userId).Scan(&targetAmount)
+	return targetAmount, err
 }

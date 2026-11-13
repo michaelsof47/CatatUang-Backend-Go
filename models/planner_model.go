@@ -15,6 +15,6 @@ type PlannerBookModels struct {
 type DetailBookItemModels struct {
 	ItemPlannerId   int    `json:"item_id" form:"item_id"`
 	PlannerItemName string `json:"item_planner_name" form:"item_planner_name"`
-	ItemTotalAmount int    `json:"item_total_amount" form:"item_total_amount"`
+	ItemTotalAmount int64  `json:"item_total_amount" form:"item_total_amount"`
 	PlannerBookId
 }
