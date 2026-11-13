@@ -1,0 +1,8 @@
+.git
+.github
+.env
+service_account.json
+uploads
+exports
+README.md
+*.md
